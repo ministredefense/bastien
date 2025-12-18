@@ -90,6 +90,13 @@
         .rarity-indicator {
             width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 8px;
         }
+        .stat-box {
+            text-align: center; margin-bottom: 15px; padding: 15px; 
+            background: rgba(255,255,255,0.05); border-radius: 8px;
+        }
+        .stat-number {
+            font-size: 2rem; color: var(--accent); font-weight: bold; display: block;
+        }
     </style>
 </head>
 <body>
@@ -111,6 +118,25 @@
         <div id="leaderInfoBanner" class="leader-welcome-banner hidden">
             Приветствуем, <b id="bannerNick">NICKE</b><br>
             Лидер фракции: <b id="bannerFaction">FACTION</b>
+        </div>
+
+        <div id="leaderControls" class="hidden" style="margin-bottom: 20px;">
+            <button class="info" onclick="toggleLeaderStats()">📊 МОЯ СТАТИСТИКА</button>
+        </div>
+
+        <div id="leaderStatsCard" class="card hidden">
+            <h3>Личная статистика</h3>
+            <div class="stat-box">
+                <span class="stat-number" id="leaderStatCount">0</span>
+                ОТКРЫТО РУЛЕТОК
+            </div>
+            <h4>Использованные коды</h4>
+            <div style="max-height: 200px; overflow-y: auto;">
+                <table id="leaderCodesTable">
+                    <thead><tr><th>Код</th><th>Приз</th><th>Дата</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
         </div>
 
         <div class="card">
@@ -202,7 +228,7 @@
                 <button onclick="addNewPrize()">ДОБАВИТЬ</button>
             </div>
             <table id="prizeEditorTable">
-                <thead><tr><th>Название</th><th>Шанс (Вес)</th><th>Цвет</th><th>Действие</th></tr></thead>
+                <thead><tr><th>Название</th><th>Шанс (%)</th><th>Цвет</th><th>Действие</th></tr></thead>
                 <tbody></tbody>
             </table>
         </div>
@@ -398,7 +424,7 @@
     }
 
     async function generateNewCode() {
-        const newCode = "MIL-" + Math.random().toString(36).substring(2, 7).toUpperCase();
+        const newCode = "MO-" + Math.random().toString(36).substring(2, 7).toUpperCase();
         const creatorNick = state.currentUser.nick || state.currentUser.login;
         state.codes.push({ code: newCode, used: false, by: creatorNick });
         await saveData(BIN_DATA, { codes: state.codes, history: state.history });
@@ -462,10 +488,21 @@
         renderAll();
     }
 
+    function toggleLeaderStats() {
+        const card = document.getElementById('leaderStatsCard');
+        if(card.classList.contains('hidden')) {
+            card.classList.remove('hidden');
+        } else {
+            card.classList.add('hidden');
+        }
+    }
+
     function renderAll() {
         const nickInput = document.getElementById('pNick');
         const factionInput = document.getElementById('pFaction');
         const banner = document.getElementById('leaderInfoBanner');
+        const statsControls = document.getElementById('leaderControls');
+        const statsCard = document.getElementById('leaderStatsCard');
         
         if (state.currentUser && state.currentUser.role === 'Leader') {
             nickInput.value = state.currentUser.nick;
@@ -475,11 +512,27 @@
             document.getElementById('bannerNick').innerText = state.currentUser.nick;
             document.getElementById('bannerFaction').innerText = state.currentUser.faction;
             banner.classList.remove('hidden');
+            statsControls.classList.remove('hidden');
+
+            const myHistory = state.history.filter(h => h.nick === state.currentUser.nick);
+            document.getElementById('leaderStatCount').innerText = myHistory.length;
+            
+            const statsBody = document.querySelector('#leaderCodesTable tbody');
+            statsBody.innerHTML = myHistory.map(h => `
+                <tr>
+                    <td style="color:var(--accent)">${h.code}</td>
+                    <td>${h.prize}</td>
+                    <td style="font-size:0.8rem">${h.date}</td>
+                </tr>
+            `).join('');
+
         } else {
             if(!state.currentUser) { nickInput.value = ''; factionInput.value = ''; }
             nickInput.disabled = false;
             factionInput.disabled = false;
             banner.classList.add('hidden');
+            statsControls.classList.add('hidden');
+            statsCard.classList.add('hidden');
         }
 
         const pubBody = document.querySelector('#publicHistory tbody');
@@ -504,13 +557,15 @@
             </tr>
         `).join('');
 
+        const isStaff = state.currentUser && (state.currentUser.role === 'Admin' || state.currentUser.role === 'Minister');
+
         document.getElementById('prizesListContainer').innerHTML = state.prizes.sort((a,b) => b.weight - a.weight).map(p => `
             <div class="prize-list-item">
                 <div style="display:flex; align-items:center;">
                     <span class="rarity-indicator" style="background:${p.color}"></span>
                     <span style="color: #fff; font-weight:bold;">${p.name}</span>
                 </div>
-                <span style="font-size:0.8rem; color:#666;">Шанс: ${p.weight}%</span>
+                <span style="font-size:0.8rem; color:#666;">${isStaff ? `Шанс: ${p.weight}%` : ''}</span>
             </div>
         `).join('');
 
@@ -550,10 +605,10 @@
                 </tr>
             `).join('');
 
-            const codesReversed = [...state.codes].reverse(); 
+            const codesSorted = [...state.codes].sort((a, b) => a.used - b.used);
             const codesBody = document.querySelector('#codesHistoryTable tbody');
-            codesBody.innerHTML = codesReversed.map(c => `
-                <tr>
+            codesBody.innerHTML = codesSorted.map(c => `
+                <tr style="opacity: ${c.used ? '0.5' : '1'}">
                     <td style="font-family:monospace; color: var(--accent);">${c.code}</td>
                     <td>${c.by || 'System'}</td>
                     <td>
